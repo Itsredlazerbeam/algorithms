@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Algorithm Visualizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles can go here if needed, but let's try to use Tailwind as much as possible */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+        .visualization-area {
+            min-height: 300px; /* Give it some default height */
+            background-color: #fff;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            display: flex; /* Default to flex for bars */
+            align-items: flex-end; /* Align bars to the bottom */
+            gap: 2px; /* Small gap between bars */
+            margin-bottom: 1rem;
+            overflow-x: auto; /* Add horizontal scroll for many elements */
+            position: relative; /* Needed for absolute positioning of bars during animation */
+            justify-content: center; /* Center content */
+        }
+        /* Styles for the default bar visualization */
+        .visualization-area.bar-chart {
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            position: relative;
+            overflow-x: auto;
+            justify-content: flex-start; /* Align bars to the start */
+        }
+        .data-bar {
+            width: 100%; /* Will be overridden by flex-basis or width style */
+            background-color: #3b82f6; /* Default Blue-500 */
+            transition: height 0.1s ease, background-color 0.1s ease, transform 0.3s ease, left 0.3s ease, opacity 0.3s ease; /* Smooth transitions including transform, left, and opacity */
+            position: absolute; /* Position absolutely for controlled movement */
+            bottom: 0; /* Align to the bottom */
+        }
+        .data-bar.checking {
+            background-color: #f59e0b; /* Amber-500 */
+        }
+        .data-bar.found {
+            background-color: #10b981; /* Emerald-500 */
+        }
+        .data-bar.sorted {
+            background-color: #10b981; /* Emerald-500 - for sorted sections */
+        }
+        .data-bar.low {
+            background-color: #ef4444; /* Red-500 */
+        }
+        .data-bar.high {
+            background-color: #a855f7; /* Purple-500 */
+        }
+        .data-bar.mid {
+            background-color: #ec4899; /* Pink-500 */
+        }
+        /* Progressive Grey Shades for Discarded Elements (Binary Search) */
+        .data-bar.discarded-level-1 { background-color: #e5e7eb; /* Gray-200 */ }
+        .data-bar.discarded-level-2 { background-color: #d1d5db; /* Gray-300 */ }
+        .data-bar.discarded-level-3 { background-color: #9ca3af; /* Gray-400 */ }
+        .data-bar.discarded-level-4 { background-color: #6b7280; /* Gray-500 */ }
+        .data-bar.discarded-level-5 { background-color: #4b5563; /* Gray-600 */ }
+        .data-bar.discarded-level-6 { background-color: #374151; /* Gray-700 */ }
+        .data-bar.discarded-level-7 { background-color: #1f2937; /* Gray-800 */ }
+        .data-bar.discarded-level-8 { background-color: #111827; /* Gray-900 */ }
+
+        /* Insertion Sort Specific Styles */
+        .data-bar.comparing {
+            background-color: #a78bfa; /* Violet-400 */
+        }
+        .data-bar.inserting {
+            background-color: #fb923c; /* Orange-400 */
+            z-index: 10; /* Bring the inserting element to the front */
+        }
+
+        /* Bubble Sort Specific Styles */
+        .data-bar.swapping {
+            background-color: #f472b6; /* Pink-400 */
+        }
+
+        /* Quick Sort Specific Styles - REMOVED */
+
+
+        /* Merge Sort Specific Styles (Box Visualization) - REMOVED */
+
+        .trace-box {
+            min-height: 150px;
+            background-color: #fff;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            overflow-y: auto; /* Add vertical scroll */
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+        .trace-entry {
+            margin-bottom: 0.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #eee;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body class="p-4">
+    <div class="container">
+        <h1 class="text-3xl font-bold text-center mb-6">Algorithm Visualizer</h1>
+
+        <div class="controls bg-white p-6 rounded-lg shadow-md mb-6 grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+            <div>
+                <label for="algorithm-select" class="block text-sm font-medium text-gray-700 mb-1">Choose Algorithm:</label>
+                <select id="algorithm-select" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                    <option value="linear-search">Linear Search</option>
+                    <option value="binary-search">Binary Search</option>
+                    <option value="bubble-sort">Bubble Sort</option>
+                    <option value="insertion-sort">Insertion Sort</option>
+                    </select>
+            </div>
+
+            <div id="target-input-group" class="hidden">
+                <label for="target-value" class="block text-sm font-medium text-gray-700 mb-1">Target Value:</label>
+                <input type="number" id="target-value" value="10" class="mt-1 block w-full pl-3 pr-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+            </div>
+
+
+            <div>
+                <label for="data-size" class="block text-sm font-medium text-gray-700 mb-1">Data Size:</label>
+                <input type="number" id="data-size" value="50" min="10" max="200" class="mt-1 block w-full pl-3 pr-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-4 md:col-span-1">
+                <button id="generate-data-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-md transition duration-300 ease-in-out">
+                    Generate Data
+                </button>
+                <button id="start-viz-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-md transition duration-300 ease-in-out">
+                    Start Visualization
+                </button>
+                <button id="pause-resume-btn" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-md transition duration-300 ease-in-out hidden">
+                    Pause
+                </button>
+                <button id="reset-btn" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md transition duration-300 ease-in-out hidden">
+                    Reset
+                </button>
+            </div>
+        </div>
+
+        <div id="visualization-area" class="visualization-area shadow-md">
+            </div>
+
+        <div class="data-display mb-6">
+            <h2 class="text-xl font-semibold mb-2">Current Data:</h2>
+            <div id="current-data" class="bg-white p-4 rounded-md shadow-md text-sm break-all">
+                </div>
+        </div>
+
+
+        <div class="trace-box shadow-md">
+            <h2 class="text-xl font-semibold mb-2">Trace:</h2>
+            <div id="trace-log">
+                </div>
+        </div>
+    </div>
+
+    <script>
+        const algorithmSelect = document.getElementById('algorithm-select');
+        const dataSizeInput = document.getElementById('data-size');
+        const generateDataBtn = document.getElementById('generate-data-btn');
+        const startVizBtn = document.getElementById('start-viz-btn');
+        const visualizationArea = document.getElementById('visualization-area');
+        const currentDataDisplay = document.getElementById('current-data');
+        const traceLog = document.getElementById('trace-log');
+        const targetInputGroup = document.getElementById('target-input-group');
+        const targetValueInput = document.getElementById('target-value');
+        const pauseResumeBtn = document.getElementById('pause-resume-btn');
+        const resetBtn = document.getElementById('reset-btn');
+
+
+        let dataArray = [];
+        let originalDataArray = []; // Store original data for reset
+        const maxBarHeight = 250; // Maximum height for visualization bars
+
+        // Define different animation delays for each algorithm
+        const animationDelays = {
+            'linear-search': 50, // Quick
+            'binary-search': 400, // Slower for better visibility of discards
+            'bubble-sort': 100,
+            'insertion-sort': 200,
+        };
+
+        // Animation control variables
+        let animationPaused = false;
+        let animationFrameId = null; // To store the ID returned by setTimeout
+        let currentAnimationSteps = [];
+        let currentStepIndex = 0;
+        let currentAlgorithm = null;
+
+        // Global array to hold references to bar DOM elements in their current logical/visual order
+        // This array will be mutated during sorting animations.
+        let barElements = [];
+        let initialBarElementsOrder = []; // To store initial order for reset
+
+        // Array to keep track of the discard level for each bar (Binary Search)
+        let barDiscardLevels = [];
+        // Tailwind grey shades for progressive discarding (Binary Search)
+        const greyShades = [
+            'gray-200', 'gray-300', 'gray-400', 'gray-500',
+            'gray-600', 'gray-700', 'gray-800', 'gray-900'
+        ];
+
+        // Global variable for barWidth
+        let barWidth = 0;
+
+
+        // Function to generate a random dataset
+        function generateRandomData(size) {
+            dataArray = [];
+            for (let i = 0; i < size; i++) {
+                // Generate values between 1 and size
+                dataArray.push(Math.floor(Math.random() * size) + 1);
+            }
+            originalDataArray = [...dataArray]; // Store a copy of the original data
+            displayData();
+            renderVisualization(dataArray);
+            barDiscardLevels = Array(dataArray.length).fill(0); // Reset discard levels
+        }
+
+        // Function to display the current data array
+        function displayData() {
+            currentDataDisplay.textContent = '[' + dataArray.join(', ') + ']';
+        }
+
+        // Function to render the visualization
+        function renderVisualization(arr) {
+            visualizationArea.innerHTML = ''; // Clear previous visualization
+            barElements = []; // Reset for new visualization
+            const selectedAlgorithm = algorithmSelect.value;
+
+            // Always use bar chart visualization for the remaining algorithms
+            visualizationArea.classList.remove('box-tree');
+            visualizationArea.classList.add('bar-chart');
+            // Ensure the visualization area is wide enough for all bars
+            visualizationArea.style.justifyContent = 'flex-start'; // Align bars to the start for better control
+
+            // Calculate global barWidth here
+            barWidth = Math.max(1, (visualizationArea.clientWidth / arr.length) - 2);
+
+            arr.forEach((value, index) => {
+                const bar = document.createElement('div');
+                bar.classList.add('data-bar', 'rounded-sm');
+                bar.style.height = `${(value / parseInt(dataSizeInput.value)) * maxBarHeight}px`; // Scale height based on data size input max
+                bar.style.width = `${barWidth}px`;
+                bar.style.left = `${index * (barWidth + 2)}px`; // Position bars horizontally
+                bar.dataset.value = value;
+                bar.dataset.originalIndex = index; // Store original index for identity
+                visualizationArea.appendChild(bar);
+                barElements.push(bar); // Add to our ordered list of elements
+            });
+            initialBarElementsOrder = [...barElements]; // Store initial order for reset
+        }
+
+
+        // Function to add an entry to the trace log
+        function logTrace(message, color = 'text-gray-800') {
+            const traceEntry = document.createElement('div');
+            traceEntry.classList.add('trace-entry', color);
+            traceEntry.textContent = message;
+            traceLog.appendChild(traceEntry);
+            // Auto-scroll to the bottom
+            traceLog.scrollTop = traceLog.scrollHeight;
+        }
+
+        // Function to remove all algorithm-specific highlighting classes that are *temporary*
+        function removeTemporaryHighlightClasses(element) {
+            element.classList.remove('checking', 'found', 'low', 'high', 'mid', 'comparing', 'inserting', 'swapping', 'pivot');
+            // 'sorted' and 'discarded-level-X' are persistent until reset
+        }
+
+        // Function to reset bar colors to default (only removing persistent classes on full reset)
+        function resetVisualizationColors() {
+            const bars = visualizationArea.querySelectorAll('.data-bar');
+            bars.forEach(bar => {
+                removeTemporaryHighlightClasses(bar); // Remove temporary highlights
+                bar.classList.remove('sorted'); // Remove sorted state
+                bar.classList.forEach(cls => { // Remove all discarded levels
+                    if (cls.startsWith('discarded-level-')) {
+                        bar.classList.remove(cls);
+                    }
+                });
+                bar.style.backgroundColor = ''; // Reset to default blue from CSS
+                bar.style.opacity = '1'; // Reset opacity
+            });
+            barDiscardLevels = Array(dataArray.length).fill(0); // Reset discard levels state
+        }
+
+        // Simple sorting function (used for Binary Search data preparation)
+        function simpleSort(arr) {
+            return arr.slice().sort((a, b) => a - b);
+        }
+
+        // Function to swap two DOM elements visually and logically
+        function swapVisualBars(index1, index2, currentBarWidth) {
+            const bar1 = barElements[index1];
+            const bar2 = barElements[index2];
+
+            // Animate their positions
+            bar1.style.left = `${index2 * (currentBarWidth + 2)}px`;
+            bar2.style.left = `${index1 * (currentBarWidth + 2)}px`;
+
+            // Swap them in the barElements array (logical swap)
+            [barElements[index1], barElements[index2]] = [barElements[index2], barElements[index1]];
+        }
+
+        // Function to shift a bar visually and logically (for insertion sort)
+        function shiftVisualBar(fromIndex, toIndex, currentBarWidth) {
+            const barToShift = barElements[fromIndex];
+            barToShift.style.left = `${toIndex * (currentBarWidth + 2)}px`;
+
+            // Update barElements array to reflect the shift
+            const [removed] = barElements.splice(fromIndex, 1);
+            barElements.splice(toIndex, 0, removed);
+        }
+
+
+        // --- Algorithm Implementations ---
+
+        // Linear Search Algorithm
+        function linearSearch(arr, target) {
+            const steps = [];
+            let found = false;
+            for (let i = 0; i < arr.length; i++) {
+                // Step: Checking current element
+                steps.push({
+                    algorithm: 'linear-search',
+                    arrayState: [...arr], // Clone array state
+                    checkingIndex: i,
+                    message: `Checking index ${i} (value: ${arr[i]})`,
+                    found: false,
+                    finished: false
+                });
+
+                if (arr[i] === target) {
+                    // Step: Target found
+                    steps.push({
+                        algorithm: 'linear-search',
+                        arrayState: [...arr],
+                        checkingIndex: i,
+                        message: `Target ${target} found at index ${i}!`,
+                        found: true,
+                        finished: true
+                    });
+                    found = true;
+                    break; // Target found, exit loop
+                }
+            }
+
+            if (!found) {
+                // Step: Target not found
+                steps.push({
+                    algorithm: 'linear-search',
+                    arrayState: [...arr],
+                    checkingIndex: -1, // No specific index highlighted at the end
+                    message: `Target ${target} not found in the array.`,
+                    found: false,
+                    finished: true
+                });
+            }
+
+            return steps;
+        }
+
+        // Binary Search Algorithm
+        function binarySearch(arr, target) {
+            const steps = [];
+            let low = 0;
+            let high = arr.length - 1;
+            let found = false;
+
+            while (low <= high) {
+                const previousLow = low; // Capture state before potential change
+                const previousHigh = high; // Capture state before potential change
+
+                const mid = Math.floor((low + high) / 2);
+                const midValue = arr[mid];
+
+                // Step: Checking middle element (before low/high update)
+                steps.push({
+                    algorithm: 'binary-search',
+                    arrayState: [...arr],
+                    previousLow: previousLow,
+                    previousHigh: previousHigh,
+                    currentLow: low,
+                    currentHigh: high,
+                    mid: mid,
+                    message: `Checking middle element at index ${mid} (value: ${midValue}). Current range [${previousLow}, ${previousHigh}]`,
+                    found: false,
+                    finished: false,
+                    comparisonResult: null
+                });
+
+
+                if (midValue === target) {
+                    // Step: Target found
+                    steps.push({
+                        algorithm: 'binary-search',
+                        arrayState: [...arr],
+                        previousLow: previousLow, // Use previous range for highlighting context
+                        previousHigh: previousHigh,
+                        currentLow: mid, // The found element is the effective range
+                        currentHigh: mid,
+                        mid: mid,
+                        message: `Target ${target} found at index ${mid}!`,
+                        found: true,
+                        finished: true,
+                        comparisonResult: 'found'
+                    });
+                    found = true;
+                    break; // Target found, exit loop
+                } else if (midValue < target) {
+                    // Target is in the right half
+                    low = mid + 1;
+                    steps[steps.length - 1].comparisonResult = 'too low'; // Update previous step's comparison
+                    // Step: Discarding left half (after low update)
+                    steps.push({
+                        algorithm: 'binary-search',
+                        type: 'discard', // Indicate a discard step
+                        arrayState: [...arr],
+                        previousLow: previousLow, // The range before discard
+                        previousHigh: previousHigh,
+                        currentLow: low, // The new range starts here
+                        currentHigh: high,
+                        mid: mid, // Keep mid for highlighting in this step
+                        message: `Value at index ${mid} (${midValue}) is too low. Discarding left half. New range [${low}, ${high}]`,
+                        found: false,
+                        finished: false,
+                        comparisonResult: 'too low'
+                    });
+                } else {
+                    // Target is in the left half
+                    high = mid - 1;
+                    steps[steps.length - 1].comparisonResult = 'too high'; // Update previous step's comparison
+                    // Step: Discarding right half (after high update)
+                    steps.push({
+                        algorithm: 'binary-search',
+                        type: 'discard', // Indicate a discard step
+                        arrayState: [...arr],
+                        previousLow: previousLow, // The range before discard
+                        previousHigh: previousHigh,
+                        currentLow: low,
+                        currentHigh: high, // The new range ends here
+                        mid: mid, // Keep mid for highlighting in this step
+                        message: `Value at index ${mid} (${midValue}) is too high. Discarding right half. New range [${low}, ${high}]`,
+                        found: false,
+                        finished: false,
+                        comparisonResult: 'too high'
+                    });
+                }
+            }
+
+            if (!found) {
+                // Step: Target not found
+                steps.push({
+                    algorithm: 'binary-search',
+                    arrayState: [...arr],
+                    previousLow: low, // Final range before loop condition fails
+                    previousHigh: high,
+                    currentLow: low, // Final range is empty or invalid
+                    currentHigh: high,
+                    mid: -1, // No specific mid at the end
+                    message: `Target ${target} not found in the array.`,
+                    found: false,
+                    finished: true
+                });
+            }
+
+            return steps;
+        }
+
+        // Insertion Sort Algorithm
+        function insertionSort(arr) {
+            const steps = [];
+            const n = arr.length;
+            let currentArray = [...arr]; // Work on a copy
+
+            // Initial state
+            steps.push({
+                algorithm: 'insertion-sort',
+                type: 'initial',
+                arrayState: [...currentArray],
+                message: "Starting Insertion Sort.",
+                finished: false,
+                sortedUntil: 0
+            });
+
+
+            for (let i = 1; i < n; i++) {
+                let currentElement = currentArray[i];
+                let j = i - 1;
+
+                // Step: Picking up the element to insert
+                steps.push({
+                    algorithm: 'insertion-sort',
+                    type: 'pick',
+                    arrayState: [...currentArray], // Array state before shifts
+                    currentIndex: i, // Index of the element being picked
+                    message: `Picking element ${currentElement} at index ${i}.`,
+                    finished: false,
+                    sortedUntil: i - 1
+                });
+
+                while (j >= 0 && currentArray[j] > currentElement) {
+                    // Step: Comparing and shifting
+                    // Before the shift happens in the array state
+                    steps.push({
+                        algorithm: 'insertion-sort',
+                        type: 'compare-shift',
+                        arrayState: [...currentArray], // Array state before this shift
+                        currentIndex: i, // Element being inserted (its original index)
+                        compareIndex: j, // Element being compared against
+                        shiftIndex: j, // Element to be shifted
+                        message: `Comparing ${currentElement} with ${currentArray[j]} at index ${j}. ${currentArray[j]} > ${currentElement}, shifting right.`,
+                        finished: false,
+                        sortedUntil: i - 1
+                    });
+
+                    currentArray[j + 1] = currentArray[j]; // Perform the shift in the array copy
+                    j--;
+                }
+
+                // Step: Inserting the element
+                currentArray[j + 1] = currentElement;
+                steps.push({
+                    algorithm: 'insertion-sort',
+                    type: 'insert',
+                    arrayState: [...currentArray], // Array state after insertion
+                    currentIndex: i, // The element that was originally at i
+                    insertPosition: j + 1, // The index where it's inserted
+                    message: `Inserting ${currentElement} at index ${j + 1}.`,
+                    finished: false,
+                    sortedUntil: i
+                });
+
+            }
+
+            // Final sorted state
+            steps.push({
+                algorithm: 'insertion-sort',
+                type: 'finish',
+                arrayState: [...currentArray],
+                message: "Array is sorted.",
+                finished: true,
+                sortedUntil: n - 1
+            });
+
+            return steps;
+        }
+
+        // Bubble Sort Algorithm
+        function bubbleSort(arr) {
+            const steps = [];
+            const n = arr.length;
+            let currentArray = [...arr]; // Work on a copy
+
+            // Initial state
+            steps.push({
+                algorithm: 'bubble-sort',
+                type: 'initial',
+                arrayState: [...currentArray],
+                message: "Starting Bubble Sort.",
+                finished: false,
+                sortedUntil: n // Initially, no elements are sorted from the end
+            });
+
+            for (let i = 0; i < n - 1; i++) {
+                let swapped = false;
+                for (let j = 0; j < n - 1 - i; j++) {
+                    // Step: Comparing adjacent elements
+                    steps.push({
+                        algorithm: 'bubble-sort',
+                        type: 'compare',
+                        arrayState: [...currentArray],
+                        compareIndex1: j,
+                        compareIndex2: j + 1,
+                        message: `Comparing ${currentArray[j]} and ${currentArray[j + 1]} at indices ${j} and ${j + 1}.`,
+                        finished: false,
+                        sortedUntil: n - i
+                    });
+
+                    if (currentArray[j] > currentArray[j + 1]) {
+                        // Step: Swapping elements
+                        const temp = currentArray[j];
+                        currentArray[j] = currentArray[j + 1];
+                        currentArray[j + 1] = temp;
+                        swapped = true;
+
+                        steps.push({
+                            algorithm: 'bubble-sort',
+                            type: 'swap',
+                            arrayState: [...currentArray], // State after swap
+                            swapIndex1: j,
+                            swapIndex2: j + 1,
+                            message: `Swapping ${currentArray[j + 1]} and ${currentArray[j]}. Array: [${currentArray.join(', ')}]`,
+                            finished: false,
+                            sortedUntil: n - i
+                        });
+                    }
+                }
+
+                // After a pass, the last i elements are in place.
+                // If no swaps occurred in a pass, the array is sorted.
+                steps.push({
+                    algorithm: 'bubble-sort',
+                    type: 'pass-end',
+                    arrayState: [...currentArray],
+                    message: `Pass ${i + 1} finished. ${swapped ? 'Swaps occurred.' : 'No swaps occurred - array is sorted.'}`,
+                    finished: !swapped, // Finish if no swaps
+                    sortedUntil: n - 1 - i // Mark the last element of this pass as sorted
+                });
+
+
+                if (!swapped) {
+                    break; // Array is sorted
+                }
+            }
+
+            // Final sorted state (if not already marked finished)
+            if (!steps[steps.length - 1].finished) {
+                steps.push({
+                    algorithm: 'bubble-sort',
+                    type: 'finish',
+                    arrayState: [...currentArray],
+                    message: "Array is sorted.",
+                    finished: true,
+                    sortedUntil: 0 // All elements are sorted
+                });
+            }
+
+            return steps;
+        }
+
+
+        // --- Animation Logic ---
+
+        // Moved performStep out of animateSteps to make it globally accessible
+        function performStep() {
+            if (animationPaused) {
+                resetBtn.classList.remove('hidden');
+                return;
+            }
+
+            if (currentStepIndex < currentAnimationSteps.length) {
+                const step = currentAnimationSteps[currentStepIndex];
+                const algorithmDelay = animationDelays[step.algorithm];
+
+                // Clear temporary highlights for all bars (for bar chart algorithms)
+                // For Binary Search, we only clear temporary highlights, not persistent discards
+                barElements.forEach(bar => {
+                    removeTemporaryHighlightClasses(bar);
+                    // Only reset background color to default blue if it's not sorted or discarded
+                    if (!bar.classList.contains('sorted') && !bar.classList.contains('discarded-level-1') &&
+                        !bar.classList.contains('discarded-level-2') && !bar.classList.contains('discarded-level-3') &&
+                        !bar.classList.contains('discarded-level-4') && !bar.classList.contains('discarded-level-5') &&
+                        !bar.classList.contains('discarded-level-6') && !bar.classList.contains('discarded-level-7') &&
+                        !bar.classList.contains('discarded-level-8')) {
+                        bar.style.backgroundColor = '';
+                    }
+                    bar.style.opacity = '1'; // Reset opacity for all bars
+                });
+
+
+                // Apply step-specific highlights and animations
+                if (step.algorithm === 'linear-search') {
+                    if (step.checkingIndex !== -1) {
+                        barElements[step.checkingIndex].classList.add('checking');
+                    }
+                    if (step.found) {
+                        barElements[step.checkingIndex].classList.add('found');
+                        barElements[step.checkingIndex].classList.remove('checking');
+                    }
+                } else if (step.algorithm === 'binary-search') {
+                    // Apply discarded grey color and update discard levels
+                    if (step.type === 'discard') { // Only apply discard logic on discard steps
+                        for (let i = 0; i < barElements.length; i++) {
+                            // If a bar is outside the current active range [currentLow, currentHigh]
+                            if (i < step.currentLow || i > step.currentHigh) {
+                                // And it was inside the previous active range [previousLow, previousHigh]
+                                if (i >= step.previousLow && i <= step.previousHigh) {
+                                    // This bar was just discarded, increment its discard level
+                                    barDiscardLevels[i]++;
+                                    const level = barDiscardLevels[i];
+                                    if (level > 0 && level <= greyShades.length) {
+                                        // Remove previous discarded level classes
+                                        barElements[i].classList.forEach(cls => {
+                                            if (cls.startsWith('discarded-level-')) {
+                                                barElements[i].classList.remove(cls);
+                                            }
+                                        });
+                                        // Add the new discarded level class
+                                        barElements[i].classList.add(`discarded-level-${level}`);
+                                    }
+                                }
+                            }
+                            // Bars within the current range keep their default color (or temporary highlights)
+                            // Their discard level is implicitly 0.
+                        }
+                    }
+
+                    // Apply low, high, mid highlights based on the *current* range, with bounds checks
+                    if (step.currentLow >= 0 && step.currentLow < barElements.length && barElements[step.currentLow]) {
+                        barElements[step.currentLow].classList.add('low');
+                    }
+                    if (step.currentHigh >= 0 && step.currentHigh < barElements.length && barElements[step.currentHigh]) {
+                        barElements[step.currentHigh].classList.add('high');
+                    }
+                    if (step.mid >= 0 && step.mid < barElements.length && barElements[step.mid]) {
+                        barElements[step.mid].classList.add('mid');
+                    }
+
+
+                    if (step.found) {
+                        if (step.mid >= 0 && step.mid < barElements.length && barElements[step.mid]) {
+                            barElements[step.mid].classList.add('found');
+                            barElements[step.mid].classList.remove('mid', 'low', 'high');
+                        }
+                    }
+                } else if (step.algorithm === 'insertion-sort') {
+                    if (step.type === 'pick') {
+                        barElements[step.currentIndex].classList.add('inserting');
+                    } else if (step.type === 'compare-shift') {
+                        barElements[step.compareIndex].classList.add('comparing');
+                        // Animate the shift right
+                        shiftVisualBar(step.compareIndex, step.compareIndex + 1, barWidth);
+                    } else if (step.type === 'insert') {
+                        // Find the bar that was originally picked (by its originalIndex)
+                        const barToInsert = barElements.find(bar => parseInt(bar.dataset.originalIndex) === step.currentIndex);
+                        if (barToInsert) {
+                            // Ensure it's in the barElements array at the correct logical position
+                            // This is handled by `shiftVisualBar` in the previous step for intermediate shifts.
+                            // For the final insert, we need to ensure it moves to the `insertPosition`.
+                            const currentVisualIndex = barElements.indexOf(barToInsert);
+                            if (currentVisualIndex !== step.insertPosition) {
+                                shiftVisualBar(currentVisualIndex, step.insertPosition, barWidth);
+                            }
+                            barToInsert.classList.add('inserting'); // Keep highlighting while it settles
+                        }
+                    }
+
+                    // After each step, ensure all bars are positioned correctly according to the `barElements` array
+                    // and apply sorted highlights.
+                    barElements.forEach((bar, idx) => {
+                        bar.style.left = `${idx * (barWidth + 2)}px`;
+                        if (idx <= step.sortedUntil) {
+                            bar.classList.add('sorted');
+                        } else {
+                            bar.classList.remove('sorted');
+                        }
+                    });
+
+                } else if (step.algorithm === 'bubble-sort') {
+                    if (step.type === 'compare') {
+                        barElements[step.compareIndex1].classList.add('comparing');
+                        barElements[step.compareIndex2].classList.add('comparing');
+                    } else if (step.type === 'swap') {
+                        barElements[step.swapIndex1].classList.add('swapping');
+                        barElements[step.swapIndex2].classList.add('swapping');
+                        swapVisualBars(step.swapIndex1, step.swapIndex2, barWidth);
+                    }
+                    // Apply sorted highlights based on `sortedUntil` from the end
+                    barElements.forEach((bar, idx) => {
+                        if (idx >= step.sortedUntil) { // Bubble sort sorts from the end
+                            bar.classList.add('sorted');
+                        } else {
+                            bar.classList.remove('sorted');
+                        }
+                    });
+                }
+
+
+                // Update trace log
+                logTrace(step.message);
+
+                // Update data display (only if arrayState changed)
+                if (step.algorithm !== 'linear-search') { // Linear search doesn't change array
+                    currentDataDisplay.textContent = '[' + step.arrayState.join(', ') + ']';
+                }
+
+
+                currentStepIndex++;
+                if (!step.finished) {
+                    animationFrameId = setTimeout(performStep, algorithmDelay);
+                } else {
+                    logTrace("Algorithm finished.", 'text-green-600');
+                    // Hide control buttons when finished
+                    pauseResumeBtn.classList.add('hidden');
+                    resetBtn.classList.add('hidden');
+                    generateDataBtn.classList.remove('hidden'); // Show generate/start buttons
+                    startVizBtn.classList.remove('hidden');
+
+
+                    // Keep the final state highlighted if found/sorted, otherwise reset after a delay
+                    if (step.algorithm === 'linear-search' && !step.found) {
+                        setTimeout(resetVisualizationColors, animationDelays['linear-search'] * 5); // Use specific delay for reset
+                    } else if (step.algorithm === 'binary-search') {
+                        if (!step.found) {
+                            // If not found, reset all colors including discards after a delay
+                            setTimeout(resetVisualizationColors, animationDelays['binary-search'] * 3);
+                        } else {
+                            // If found, keep the found bar highlighted, but reset discard colors on others after a delay
+                            setTimeout(() => {
+                                barElements.forEach((bar, index) => {
+                                    if (index !== step.mid) { // Don't reset the found bar
+                                        removeTemporaryHighlightClasses(bar); // Remove all temporary highlights
+                                        bar.classList.forEach(cls => { // Remove all discarded levels
+                                            if (cls.startsWith('discarded-level-')) {
+                                                bar.classList.remove(cls);
+                                            }
+                                        });
+                                        bar.style.backgroundColor = ''; // Reset color
+                                    }
+                                });
+                                barDiscardLevels = Array(barElements.length).fill(0); // Reset state
+                            }, animationDelays['binary-search'] * 3);
+                        }
+                    } else if (step.algorithm === 'insertion-sort' || step.algorithm === 'bubble-sort') {
+                        // Ensure final positions are correct and keep sorted bars highlighted
+                        // Re-position all bars based on the final sorted state from the last step's arrayState
+                        const finalArrayState = steps[steps.length - 1].arrayState;
+                        const finalBarWidth = barElements.length > 0 ? Math.max(1, (visualizationArea.clientWidth / barElements.length) - 2) : 0;
+
+                        // Create a temporary map to find the correct DOM element for each value in the final array state
+                        const tempBarMap = new Map();
+                        initialBarElementsOrder.forEach(bar => { // Use initial order to ensure all bars are considered
+                            const value = parseInt(bar.dataset.value);
+                            if (!tempBarMap.has(value)) {
+                                tempBarMap.set(value, []);
+                            }
+                            tempBarMap.get(value).push(bar);
+                        });
+
+                        // Clear current barElements and rebuild it based on the final sorted state
+                        barElements = [];
+                        finalArrayState.forEach((value, index) => {
+                            const bar = tempBarMap.get(value).shift(); // Get the first available bar with this value
+                            if (bar) {
+                                bar.style.left = `${index * (finalBarWidth + 2)}px`;
+                                removeTemporaryHighlightClasses(bar); // Remove temporary highlights
+                                bar.classList.add('sorted'); // Mark as sorted
+                                bar.style.backgroundColor = ''; // Reset to default sorted color
+                                bar.style.opacity = '1'; // Ensure full opacity for sorted bars
+                                barElements.push(bar); // Add to the new ordered barElements array
+                            }
+                        });
+                        // Also, ensure the DOM order matches the new barElements order for future operations
+                        barElements.forEach(bar => visualizationArea.appendChild(bar));
+                    }
+                }
+
+            }
+        }
+
+        function animateSteps(steps) {
+            currentAnimationSteps = steps;
+            currentStepIndex = 0;
+            currentAlgorithm = steps[0].algorithm;
+            animationPaused = false;
+
+            // Show/hide control buttons
+            generateDataBtn.classList.add('hidden');
+            startVizBtn.classList.add('hidden');
+            pauseResumeBtn.classList.remove('hidden');
+            pauseResumeBtn.textContent = 'Pause';
+            resetBtn.classList.add('hidden');
+
+            // Start the animation
+            performStep();
+        }
+
+        // Function to reset the visualization
+        function resetVisualization() {
+            clearTimeout(animationFrameId); // Clear any pending animation frame
+            animationPaused = false;
+            currentStepIndex = 0;
+            currentAnimationSteps = [];
+            currentAlgorithm = null;
+
+            // Re-render the visualization with original data (or sorted for binary search)
+            const selectedAlgorithm = algorithmSelect.value;
+            if (selectedAlgorithm === 'binary-search') {
+                const sortedData = simpleSort(originalDataArray);
+                renderVisualization(sortedData); // Re-render with sorted data
+                displayData();
+                barDiscardLevels = Array(sortedData.length).fill(0); // Reset discard levels
+                logTrace("Visualization reset to initially sorted data.", "text-blue-600");
+            } else {
+                renderVisualization(originalDataArray); // Re-render with original data
+                displayData();
+                barDiscardLevels = Array(originalDataArray.length).fill(0); // Reset discard levels
+                logTrace("Visualization reset to original data.", 'text-blue-600');
+            }
+
+            traceLog.innerHTML = ''; // Clear trace log
+            resetVisualizationColors(); // Ensure all colors are reset on the newly rendered bars
+
+            // Show generate/start buttons, hide others
+            generateDataBtn.classList.remove('hidden');
+            startVizBtn.classList.remove('hidden');
+            pauseResumeBtn.classList.add('hidden');
+            pauseResumeBtn.textContent = 'Pause'; // Reset button text
+            resetBtn.classList.add('hidden');
+        }
+
+
+        // Event listeners
+        generateDataBtn.addEventListener('click', () => {
+            resetVisualization(); // Reset before generating new data
+            const size = parseInt(dataSizeInput.value);
+            if (size >= 10 && size <= 200) {
+                generateRandomData(size);
+                traceLog.innerHTML = ''; // Clear trace on new data
+                logTrace(`Generated a new dataset of size ${size}.`);
+                // Re-sort immediately if Binary Search is selected
+                if (algorithmSelect.value === 'binary-search') {
+                    const sortedData = simpleSort(dataArray);
+                    renderVisualization(sortedData);
+                    displayData();
+                    barDiscardLevels = Array(sortedData.length).fill(0); // Initialize discard levels for sorted data
+                    logTrace("Data sorted for Binary Search.", 'text-blue-600');
+                }
+            } else {
+                logTrace("Please enter a valid data size between 10 and 200.", 'text-red-600');
+            }
+        });
+
+        startVizBtn.addEventListener('click', () => {
+            const selectedAlgorithm = algorithmSelect.value;
+            if (dataArray.length === 0) {
+                logTrace("Please generate data first.", 'text-red-600');
+                return;
+            }
+
+            // Reset visualization before starting a new one
+            resetVisualization();
+
+            traceLog.innerHTML = ''; // Clear trace on new visualization
+            resetVisualizationColors(); // Reset colors before starting new viz
+
+            if (selectedAlgorithm === 'linear-search') {
+                const targetValue = parseInt(targetValueInput.value);
+                if (isNaN(targetValue)) {
+                    logTrace("Please enter a valid number for the target value.", 'text-red-600');
+                    return;
+                }
+                logTrace(`Starting Linear Search for target ${targetValue}...`);
+                const steps = linearSearch(dataArray, targetValue); // Pass targetValue
+                animateSteps(steps);
+            } else if (selectedAlgorithm === 'binary-search') {
+                const targetValue = parseInt(targetValueInput.value);
+                if (isNaN(targetValue)) {
+                    logTrace("Please enter a valid number for the target value.", 'text-red-600');
+                    return;
+                }
+                // Data is already sorted on algorithm select/data generate for binary search
+                logTrace(`Starting Binary Search for target ${targetValue}...`);
+                const sortedData = simpleSort(dataArray); // Use a fresh sorted copy for the algorithm
+                const steps = binarySearch(sortedData, targetValue);
+                animateSteps(steps);
+
+            } else if (selectedAlgorithm === 'insertion-sort') {
+                logTrace(`Starting Insertion Sort...`);
+                const steps = insertionSort(dataArray);
+                animateSteps(steps);
+            } else if (selectedAlgorithm === 'bubble-sort') {
+                logTrace(`Starting Bubble Sort...`);
+                const steps = bubbleSort(dataArray);
+                animateSteps(steps);
+            } else {
+                logTrace(`Visualization logic for ${selectedAlgorithm} is not yet implemented.`, 'text-orange-600');
+            }
+        });
+
+        // Pause/Resume button functionality
+        pauseResumeBtn.addEventListener('click', () => {
+            animationPaused = !animationPaused; // Toggle pause state
+            if (animationPaused) {
+                pauseResumeBtn.textContent = 'Resume';
+                resetBtn.classList.remove('hidden'); // Show reset when paused
+                logTrace("Animation paused.", 'text-yellow-600');
+                clearTimeout(animationFrameId); // Explicitly clear the timeout when pausing
+            } else {
+                pauseResumeBtn.textContent = 'Pause';
+                resetBtn.classList.add('hidden'); // Hide reset when resuming
+                logTrace("Animation resumed.", 'text-blue-600');
+                // When resuming, we need to explicitly call performStep to continue the loop.
+                // The next setTimeout will be scheduled from inside performStep if not finished.
+                performStep();
+            }
+        });
+
+        // Reset button functionality
+        resetBtn.addEventListener('click', () => {
+            resetVisualization();
+            logTrace("Visualization reset.", 'text-red-600');
+        });
+
+
+        // Show/hide target input based on selected algorithm and handle binary search sorting
+        algorithmSelect.addEventListener('change', () => {
+            const selectedAlgorithm = algorithmSelect.value;
+            if (selectedAlgorithm === 'linear-search' || selectedAlgorithm === 'binary-search') {
+                targetInputGroup.classList.remove('hidden');
+            } else {
+                targetInputGroup.classList.add('hidden');
+            }
+            traceLog.innerHTML = ''; // Clear trace on algorithm change
+            resetVisualizationColors(); // Reset colors and discard levels on algorithm change
+            // Re-render original data if switching from binary search, or sort immediately for binary search
+            if (selectedAlgorithm === 'binary-search') {
+                const sortedData = simpleSort(dataArray);
+                renderVisualization(sortedData);
+                displayData();
+                barDiscardLevels = Array(sortedData.length).fill(0); // Initialize discard levels for sorted data
+                logTrace("Data sorted for Binary Search.", 'text-blue-600');
+            } else {
+                renderVisualization(dataArray);
+                displayData();
+            }
+            // Hide control buttons when changing algorithm
+            pauseResumeBtn.classList.add('hidden');
+            resetBtn.classList.add('hidden');
+            generateDataBtn.classList.remove('hidden'); // Show generate/start buttons
+            startVizBtn.classList.remove('hidden');
+            animationPaused = false;
+            clearTimeout(animationFrameId); // Clear any ongoing animation
+        });
+
+
+        // Initial data generation on page load
+        generateRandomData(parseInt(dataSizeInput.value));
+        // Trigger initial change event to set target input visibility and perform initial sort if needed
+        algorithmSelect.dispatchEvent(new Event('change'));
+
+
+        // Add a resize observer to re-render visualization on container resize
+        const resizeObserver = new ResizeObserver(entries => {
+            // Only re-render if the visualization area's width has changed significantly
+            for (let entry of entries) {
+                if (entry.target === visualizationArea) {
+                    // For simplicity, re-render every time for now (this will reset ongoing animation)
+                    if (dataArray.length > 0) {
+                        // Reset animation state as re-rendering resets bar elements
+                        resetVisualization();
+                        logTrace("Visualization adjusted for resize and reset.", 'text-gray-600');
+                    }
+                }
+            }
+        });
+
+        // Observe the visualization area for resizes
+        resizeObserver.observe(visualizationArea);
+
+
+    </script>
+</body>
+</html>
